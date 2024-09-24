@@ -32,7 +32,7 @@ class WeWorkIPPW(_PluginBase):
     # 加载顺序
     plugin_order = 20
     # 可使用的用户级别
-    auth_level = 2
+    auth_level = 1
 
     #匹配ip地址的正则
     _ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
