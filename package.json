@@ -6,7 +6,7 @@
         "version": "1.1",
         "icon": "statistic.png",
         "author": "suraxiuxiu",
-        "level": 2,
+        "level": 1,
         "history": {
             "v1.1": "优化cookie获取方式;支持多个应用地址,用,号分隔应用网址。"
         }
@@ -18,7 +18,7 @@
         "version": "1.1",
         "icon": "statistic.png",
         "author": "suraxiuxiu",
-        "level": 2,
+        "level": 1,
         "history": {
             "v1.1": "优化cookie获取方式;支持多个应用地址,用,号分隔应用网址。"
         }
