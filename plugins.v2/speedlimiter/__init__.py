@@ -14,7 +14,7 @@ import requests  # -------- 新增：导入requests库用于认证请求 -------
 
 class SpeedLimiter(_PluginBase):
     # 插件名称
-    plugin_name = "播放限速"
+    plugin_name = "播放限速v2"
     # 插件描述
     plugin_desc = "外网播放媒体库视频时，自动对下载器进行限速。"
     # 插件图标
