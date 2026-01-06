@@ -9,6 +9,7 @@ from app.plugins import _PluginBase
 from app.schemas import NotificationType, WebhookEventInfo, ServiceInfo
 from app.schemas.types import EventType
 from app.utils.ip import IpUtils
+import requests  # -------- 新增：导入requests库用于认证请求 --------
 
 
 class SpeedLimiter(_PluginBase):
@@ -52,7 +53,6 @@ class SpeedLimiter(_PluginBase):
     _exclude_path = ""
 
     def init_plugin(self, config: dict = None):
-
         # 读取配置
         if config:
             self._enabled = config.get("enabled")
@@ -373,18 +373,18 @@ class SpeedLimiter(_PluginBase):
                 ]
             }
         ], {
-            "enabled": False,
-            "notify": True,
-            "downloader": [],
-            "play_up_speed": None,
-            "play_down_speed": None,
-            "noplay_up_speed": None,
-            "noplay_down_speed": None,
-            "bandwidth": None,
-            "allocation_ratio": "",
-            "ipv4": "",
-            "ipv6": "",
-            "exclude_path": ""
+            'enabled': False,
+            'notify': False,
+            'downloader': [],
+            'play_up_speed': None,
+            'play_down_speed': None,
+            'noplay_up_speed': None,
+            'noplay_down_speed': None,
+            'bandwidth': None,
+            'allocation_ratio': '',
+            'ipv4': '',
+            'ipv6': '',
+            'exclude_path': ''
         }
 
     def get_page(self) -> List[dict]:
@@ -416,6 +416,27 @@ class SpeedLimiter(_PluginBase):
             return None
 
         return active_services
+
+    # -------- 新增：飞牛影视认证方法 --------
+    def _feiniu_get_token(self, service) -> Optional[str]:
+        """
+        通过用户名密码获取飞牛影视API Token
+        """
+        try:
+            auth_url = f"{service.host}/v/api/v1/auth/login"
+            payload = {
+                "username": service.username,
+                "password": service.password
+            }
+            response = requests.post(auth_url, json=payload, timeout=10)
+            if response.status_code == 200:
+                token = response.json().get("token")
+                if token:
+                    return token
+        except Exception as e:
+            logger.error(f"飞牛影视获取Token失败：{str(e)}")
+        return None
+    # -------- 飞牛影视认证方法结束 --------
 
     @eventmanager.register(EventType.WebhookMessage)
     def check_playing_sessions(self, event: Event = None):
@@ -499,6 +520,40 @@ class SpeedLimiter(_PluginBase):
                         media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
                         for media_stream in media_streams:
                             total_bit_rate += int(media_stream.get("BitRate") or 0)
+            # -------- 新增飞牛影视支持（用户名密码认证版） --------
+            elif service.type == "feiniu":
+                # 1. 获取认证Token
+                token = self._feiniu_get_token(service)
+                if not token:
+                    logger.error(f"飞牛影视 {server} 认证失败，跳过检测")
+                    continue
+                # 2. 构造会话查询请求（带Token认证）
+                req_url = f"{service.host}/v/api/v1/sessions?token={token}"
+                try:
+                    res = requests.get(req_url, timeout=10)
+                    if res and res.status_code == 200:
+                        sessions = res.json()
+                        for session in sessions:
+                            if session.get("NowPlayingItem") and not session.get("PlayState", {}).get("IsPaused"):
+                                if not self.__path_execluded(session.get("NowPlayingItem").get("Path")):
+                                    playing_sessions.append(session)
+                except Exception as e:
+                    logger.error(f"获取飞牛影视播放会话失败：{str(e)}")
+                    continue
+                # 3. 计算有效比特率（同Jellyfin逻辑）
+                for session in playing_sessions:
+                    if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
+                        if not self.__allow_access(self._unlimited_ips, session.get("RemoteEndPoint")) \
+                                and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
+                            media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
+                            for media_stream in media_streams:
+                                total_bit_rate += int(media_stream.get("BitRate") or 0)
+                    elif not IpUtils.is_private_ip(session.get("RemoteEndPoint")) \
+                            and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
+                        media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
+                        for media_stream in media_streams:
+                            total_bit_rate += int(media_stream.get("BitRate") or 0)
+            # -------- 飞牛影视支持结束 --------
             elif service.type == "plex":
                 _plex = service.instance.get_plex()
                 if _plex:
@@ -548,7 +603,7 @@ class SpeedLimiter(_PluginBase):
                     logger.info(f"{path} 在不限速路径：{exclude_path} 内，跳过限速")
                     return True
         return False
-    
+
     def __calc_limit(self, total_bit_rate: float) -> float:
         """
         计算智能上传限速
@@ -569,7 +624,7 @@ class SpeedLimiter(_PluginBase):
             return
         else:
             self._current_state = state
-            
+
         try:
             cnt = 0
             for download in self._downloader:
