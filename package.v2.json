@@ -194,10 +194,10 @@
     }
   },
   "SpeedLimiter": {
-    "name": "播放限速",
+    "name": "播放限速v2",
     "description": "外网播放媒体库视频时，自动对下载器进行限速。",
     "labels": "网络",
-    "version": "2.1",
+    "version": "2.2",
     "icon": "Librespeed_A.png",
     "author": "Shurelol",
     "level": 1,
